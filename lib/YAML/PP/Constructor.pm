@@ -81,7 +81,15 @@ sub document_end_event {
 
 sub mapping_start_event {
     my ($self, $event) = @_;
-    my $data = { type => 'mapping', ref => [], data => {}, event => $event };
+    my $tag = $event->{tag} || 'tag:yaml.org,2002:map';
+    $event = { %$event, tag => $tag };
+    my $hash = $self->schema->create_mapping($self, $event);
+    my $data = {
+        type => 'mapping',
+        ref => [],
+        data => $hash,
+        event => $event,
+    };
     $self->begin($data, $event);
 }
 
@@ -93,14 +101,7 @@ sub mapping_end_event {
     my ($type, $ref, $hash, $start_event) = @{ $last }{qw/ type ref data event /};
     $type eq 'mapping' or die "Expected mapping, but got $type";
 
-    for (my $i = 0; $i < @$ref; $i += 2) {
-        my ($key, $value) = @$ref[ $i, $i + 1 ];
-        $key = '' unless defined $key;
-        if (ref $key) {
-            $key = $self->stringify_complex($key);
-        }
-        $hash->{ $key } = $value;
-    }
+    $self->schema->mapping_data($self, $hash, $ref);
     push @{ $stack->[-1]->{ref} }, $hash;
     if (defined(my $anchor = $start_event->{anchor})) {
         my $anchors = $self->anchors;
@@ -111,8 +112,8 @@ sub mapping_end_event {
 
 sub sequence_start_event {
     my ($self, $event) = @_;
-    my $ref = [];
-    my $data = { type => 'sequence', ref => $ref, data => $ref, event => $event };
+    my $seq = [];
+    my $data = { type => 'sequence', ref => [], data => $seq, event => $event };
     $self->begin($data, $event);
 }
 
@@ -120,9 +121,10 @@ sub sequence_end_event {
     my ($self, $event) = @_;
     my $stack = $self->stack;
     my $last = pop @$stack;
-    my ($type, $ref, $start_event) = @{ $last }{qw/ type ref event /};
+    my ($type, $ref, $seq, $start_event) = @{ $last }{qw/ type ref data event /};
     $type eq 'sequence' or die "Expected mapping, but got $type";
-    push @{ $stack->[-1]->{ref} }, $ref;
+    @$seq = @$ref;
+    push @{ $stack->[-1]->{ref} }, $seq;
     if (defined(my $anchor = $start_event->{anchor})) {
         my $anchors = $self->anchors;
         $anchors->{ $anchor }->{finished} = 1;

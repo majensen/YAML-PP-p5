@@ -193,6 +193,20 @@ sub load_subschemas {
     }
 }
 
+sub add_map_resolver {
+    my ($self, %args) = @_;
+    my $tag = $args{tag};
+    my $resolvers = $self->resolvers->{map} ||= {};
+    $resolvers->{ $tag } = {
+        on_create => $args{on_create},
+        on_data => $args{on_data},
+    };
+}
+sub add_seq_resolver {
+    my ($self, %args) = @_;
+    my $tag = $args{tag};
+}
+
 sub add_resolver {
     my ($self, %args) = @_;
     my $tag = $args{tag};
@@ -308,6 +322,29 @@ sub load_scalar {
         }
     }
     return $value;
+}
+
+sub create_mapping {
+    my ($self, $constructor, $event) = @_;
+    my $tag = $event->{tag};
+    my $resolvers = $self->resolvers;
+    my $res = $resolvers->{map}->{ $tag };
+    if (my $on_create = $res->{on_create}) {
+        return $on_create->();
+    }
+    return {};
+}
+
+sub mapping_data {
+    my ($self, $constructor, $map, $data) = @_;
+    for (my $i = 0; $i < @$data; $i += 2) {
+        my ($key, $value) = @$data[ $i, $i + 1 ];
+        $key //= '';
+        if (ref $key) {
+            $key = $constructor->stringify_complex($key);
+        }
+        $map->{ $key } = $value;
+    }
 }
 
 sub bool_jsonpp_true { JSON::PP::true() }
@@ -584,6 +621,24 @@ sub register {
         code => sub {
             my ($rep, $value) = @_;
             return { quoted => "$value" };
+        },
+    );
+    $schema->add_map_resolver(
+        type => 'mapping',
+        tag => 'tag:yaml.org,2002:map',
+        on_create => sub { return {} },
+        on_data => sub {
+            my ($constructor, $ref, $elements) = @_;
+            %$ref = @$elements;
+        },
+    );
+    $schema->add_seq_resolver(
+        type => 'sequence',
+        tag => 'tag:yaml.org,2002:seq',
+        on_create => sub { return [] },
+        on_data => sub {
+            my ($constructor, $ref, $elements) = @_;
+            @$ref = @$elements;
         },
     );
 
