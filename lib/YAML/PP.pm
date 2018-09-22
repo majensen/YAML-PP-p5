@@ -339,7 +339,7 @@ sub mapping_data {
     my ($self, $constructor, $map, $data) = @_;
     for (my $i = 0; $i < @$data; $i += 2) {
         my ($key, $value) = @$data[ $i, $i + 1 ];
-        $key //= '';
+        $key = '' unless defined $key;
         if (ref $key) {
             $key = $constructor->stringify_complex($key);
         }
