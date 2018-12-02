@@ -616,14 +616,19 @@ sub start_stream {
     my ($self) = @_;
     push @{ $self->events }, 'STR';
     push @{ $self->offset }, -1;
-    $self->callback->($self, 'stream_start_event', {});
+    $self->callback->($self, 'stream_start_event', {
+        event_name => 'stream_start_event',
+    });
 }
 
 sub start_document {
     my ($self, $implicit) = @_;
     push @{ $self->events }, 'DOC';
     push @{ $self->offset }, -1;
-    $self->callback->($self, 'document_start_event', { implicit => $implicit });
+    $self->callback->($self, 'document_start_event', {
+        event_name => 'document_start_event',
+        implicit => $implicit,
+    });
 }
 
 sub start_sequence {
@@ -637,7 +642,7 @@ sub start_sequence {
     }
     push @{ $offsets }, $offset;
     my $event_stack = $self->event_stack;
-    my $info = {};
+    my $info = { event_name => 'sequence_start_event' };
     if (@$event_stack and $event_stack->[-1]->[0] eq 'properties') {
         my $properties = pop @$event_stack;
         $self->node_properties($properties->[1], $info);
@@ -660,7 +665,7 @@ sub start_flow_sequence {
     push @{ $offsets }, $new_offset;
 
     my $event_stack = $self->event_stack;
-    my $info = { style => 'flow' };
+    my $info = { style => 'flow', event_name => 'sequence_start_event'  };
     if (@$event_stack and $event_stack->[-1]->[0] eq 'properties') {
         $self->fetch_inline_properties($event_stack, $info);
     }
@@ -682,7 +687,7 @@ sub start_flow_mapping {
     push @{ $offsets }, $new_offset;
 
     my $event_stack = $self->event_stack;
-    my $info = { style => 'flow' };
+    my $info = { event_name => 'mapping_start_event', style => 'flow' };
     if (@$event_stack and $event_stack->[-1]->[0] eq 'properties') {
         $self->fetch_inline_properties($event_stack, $info);
     }
@@ -715,7 +720,7 @@ sub start_mapping {
     push @{ $self->events }, 'MAP';
     push @{ $offsets }, $offset;
     my $event_stack = $self->event_stack;
-    my $info = {};
+    my $info = { event_name => 'mapping_start_event' };
     if (@$event_stack and $event_stack->[-1]->[0] eq 'properties') {
         my $properties = pop @$event_stack;
         $self->node_properties($properties->[1], $info);
@@ -729,7 +734,10 @@ sub end_doc {
     $self->exception("Unexpected event type $last") unless $last eq 'DOC';
     pop @{ $self->offset };
     $self->set_tagmap({ '!!' => "tag:yaml.org,2002:" });
-    $self->callback->($self, 'document_end_event', { implicit => $implicit });
+    $self->callback->($self, 'document_end_event', {
+        event_name => 'document_end_event',
+        implicit => $implicit,
+    });
 }
 
 sub end_stream {
@@ -737,7 +745,9 @@ sub end_stream {
     my $last = pop @{ $self->events };
     $self->exception("Unexpected event type $last") unless $last eq 'STR';
     pop @{ $self->offset };
-    $self->callback->($self, 'stream_end_event', { });
+    $self->callback->($self, 'stream_end_event', {
+        event_name => 'stream_end_event',
+    });
 }
 
 sub fetch_inline_properties {
@@ -790,6 +800,7 @@ sub scalar_event {
         $properties = $self->node_properties($properties->[1], $info);
     }
 
+    $info->{event_name} = 'scalar_event';
     $self->callback->($self, 'scalar_event', $info);
     if ($event_types->[-1] =~ m/^FLOW/) {
     }
@@ -806,6 +817,7 @@ sub alias_event {
         $self->exception("Parse error: Alias not allowed in this context");
     }
     my $event_types = $self->events;
+    $info->{event_name} = 'alias_event';
     $self->callback->($self, 'alias_event', $info);
     if ($event_types->[-1] =~ m/^FLOW/) {
     }
@@ -856,9 +868,7 @@ sub event_to_test_suite {
     my ($self, $event) = @_;
     if (ref $event) {
         my ($ev, $info) = @$event;
-        if ($event_to_method{ $ev }) {
-            $ev = $event_to_method{ $ev } . "_event";
-        }
+        $ev = $info->{event_name};
         my $string;
         my $content = $info->{value};
 
