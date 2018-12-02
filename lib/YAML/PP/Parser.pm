@@ -8,6 +8,7 @@ our $VERSION = '0.000'; # VERSION
 use constant TRACE => $ENV{YAML_PP_TRACE} ? 1 : 0;
 use constant DEBUG => ($ENV{YAML_PP_DEBUG} || $ENV{YAML_PP_TRACE}) ? 1 : 0;
 
+use YAML::PP::Common;
 use YAML::PP::Render;
 use YAML::PP::Lexer;
 use YAML::PP::Grammar qw/ $GRAMMAR /;
@@ -464,7 +465,7 @@ my %event_to_method = (
 #    }
 #    @$event_stack = ();
 #    for my $info (@send_events) {
-#        DEBUG and $self->debug_event( $info->{event_name} => $info );
+#        DEBUG and $self->debug_event( $info );
 #        $self->callback->($self, $info->{event_name}, $info);
 #    }
 #}
@@ -866,76 +867,10 @@ sub _remaining_tokens {
 
 sub event_to_test_suite {
     my ($self, $event) = @_;
-    if (ref $event) {
-        my ($ev, $info) = @$event;
-        $ev = $info->{event_name};
-        my $string;
-        my $content = $info->{value};
-
-        my $properties = '';
-        $properties .= " &$info->{anchor}" if defined $info->{anchor};
-        $properties .= " <$info->{tag}>" if defined $info->{tag};
-
-        if ($ev eq 'document_start_event') {
-            $string = "+DOC";
-            $string .= " ---" unless $info->{implicit};
-        }
-        elsif ($ev eq 'document_end_event') {
-            $string = "-DOC";
-            $string .= " ..." unless $info->{implicit};
-        }
-        elsif ($ev eq 'stream_start_event') {
-            $string = "+STR";
-        }
-        elsif ($ev eq 'stream_end_event') {
-            $string = "-STR";
-        }
-        elsif ($ev eq 'mapping_start_event') {
-            $string = "+MAP";
-            $string .= $properties;
-            if (0) {
-                # doesn't match yaml-test-suite format
-                if ($info->{style} and $info->{style} eq 'flow') {
-                    $string .= " {}";
-                }
-            }
-        }
-        elsif ($ev eq 'sequence_start_event') {
-            $string = "+SEQ";
-            $string .= $properties;
-            if (0) {
-                # doesn't match yaml-test-suite format
-                if ($info->{style} and $info->{style} eq 'flow') {
-                    $string .= " []";
-                }
-            }
-        }
-        elsif ($ev eq 'mapping_end_event') {
-            $string = "-MAP";
-        }
-        elsif ($ev eq 'sequence_end_event') {
-            $string = "-SEQ";
-        }
-        elsif ($ev eq 'scalar_event') {
-            $string = '=VAL';
-            $string .= $properties;
-            if (defined $content) {
-                $content =~ s/\\/\\\\/g;
-                $content =~ s/\t/\\t/g;
-                $content =~ s/\r/\\r/g;
-                $content =~ s/\n/\\n/g;
-                $content =~ s/[\b]/\\b/g;
-            }
-            else {
-                $content = '';
-            }
-            $string .= ' ' . $info->{style} . $content;
-        }
-        elsif ($ev eq 'alias_event') {
-            $string = "=ALI *$content";
-        }
-        return $string;
+    if (ref $event eq 'ARRAY') {
+        return YAML::PP::Common::event_to_test_suite($event->[1]);
     }
+    return YAML::PP::Common::event_to_test_suite($event);
 }
 
 sub debug_events {
@@ -997,8 +932,8 @@ sub _colorize_warn {
 }
 
 sub debug_event {
-    my ($self, $event, $info) = @_;
-    my $str = $self->event_to_test_suite([$event, $info]);
+    my ($self, $event) = @_;
+    my $str = YAML::PP::Common::event_to_test_suite($event);
     require Term::ANSIColor;
     warn Term::ANSIColor::colored(["magenta"], "============ $str"), "\n";
 }
